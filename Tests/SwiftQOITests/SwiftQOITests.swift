@@ -4,6 +4,20 @@ import UIKit
 
 final class SwiftQOITests: XCTestCase {
     
+    func testIsQOI() throws {
+        let referenceData = getData(name: "reference", ext: "qoi")!
+        let encoder = SwiftQOI()
+        let sut = encoder.isQOI(data: referenceData)
+        XCTAssertTrue(sut)
+    }
+    
+    func testIsQOIFailed() throws {
+        let referenceData = getData(name: "reference", ext: "png")!
+        let encoder = SwiftQOI()
+        let sut = encoder.isQOI(data: referenceData)
+        XCTAssertFalse(sut)
+    }
+    
     func testEncode() throws {
         let referenceData = getData(name: "reference", ext: "qoi")!
         let image = getImage(named: "reference")!

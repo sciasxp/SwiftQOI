@@ -4,6 +4,12 @@ public class SwiftQOI {
     
     typealias Components = (width: Int, height: Int, colorSpace: CGColorSpace, channels: Int, pixels: [UInt8])
     
+    func isQOI(data: Data) -> Bool {
+        let compressed: [UInt8] = [UInt8](data)
+        let magic = Array(compressed[0..<4])
+        return magic == Constants.MAGIC
+    }
+    
     func encode(imageComponents: Components) -> Data {
         let channels = imageComponents.channels
         let pixels = imageComponents.pixels
