@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct QOIHeader {
+public struct QOIHeader {
     let magic: [UInt8]      // magic bytes "qoif"
     let width: UInt32       // image width in pixels (BE)
     let height: UInt32      // image height in pixels (BE)

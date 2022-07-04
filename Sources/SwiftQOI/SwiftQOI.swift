@@ -2,15 +2,15 @@ import UIKit
 
 public class SwiftQOI {
     
-    typealias Components = (width: Int, height: Int, colorSpace: CGColorSpace, channels: Int, pixels: [UInt8])
+    public typealias Components = (width: Int, height: Int, colorSpace: CGColorSpace, channels: Int, pixels: [UInt8])
     
-    func isQOI(data: Data) -> Bool {
+    public func isQOI(data: Data) -> Bool {
         let compressed: [UInt8] = [UInt8](data)
         let magic = Array(compressed[0..<4])
         return magic == Constants.MAGIC
     }
     
-    func encode(imageComponents: Components) -> Data {
+    public func encode(imageComponents: Components) -> Data {
         let channels = imageComponents.channels
         let pixels = imageComponents.pixels
         
@@ -88,7 +88,7 @@ public class SwiftQOI {
         return Data(buffer[0..<index])
     }
     
-    func decode(data: Data) -> (pixelsData: Data, header: QOIHeader)? {
+    public func decode(data: Data) -> (pixelsData: Data, header: QOIHeader)? {
         let compressed: [UInt8] = [UInt8](data)
         
         let header = QOIHeader (
