@@ -1,8 +1,10 @@
 import UIKit
 
-public class SwiftQOI {
+public struct SwiftQOI {
     
     public typealias Components = (width: Int, height: Int, colorSpace: CGColorSpace, channels: Int, pixels: [UInt8])
+    
+    public init() {}
     
     public func isQOI(data: Data) -> Bool {
         let compressed: [UInt8] = [UInt8](data)
