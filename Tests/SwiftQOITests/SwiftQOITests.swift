@@ -54,6 +54,18 @@ final class SwiftQOITests: XCTestCase {
         XCTAssertNotNil(sut)
     }
     
+    func testEncodeWithAppleReference() throws {
+        let image = getImage(named: "apple_reference", ext: "png")!
+        
+        let qoi = image.qoiData()!
+        let png = image.pngData()!
+        
+        let pngImage = UIImage(data: png)!
+        let qoiFromPng = pngImage.qoiData()!
+        
+        XCTAssertEqual(qoiFromPng, qoi)
+    }
+    
     func testWrite8Perfomance() throws {
         var buffer = [UInt8](repeating: 0, count: 1_000_000_000)
         var offset = 0

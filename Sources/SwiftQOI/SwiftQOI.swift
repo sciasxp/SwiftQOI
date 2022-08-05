@@ -2,7 +2,7 @@ import UIKit
 
 public struct SwiftQOI {
     
-    public typealias Components = (width: Int, height: Int, colorSpace: CGColorSpace, channels: Int, pixels: [UInt8])
+    public typealias Components = (width: Int, height: Int, colorSpace: CGColorSpace, channels: Int, bytesPerRow: Int, pixels: [UInt8])
     
     public init() {}
     
@@ -17,9 +17,8 @@ public struct SwiftQOI {
         let pixels = imageComponents.pixels
         
         let MAX_BUFFER_SIZE =
-            imageComponents.width *
-            imageComponents.height *
-            (channels + 1) + Constants.QOI_HEADER_SIZE + Constants.QOI_END_MARKER_SIZE
+            (imageComponents.width * imageComponents.height * imageComponents.bytesPerRow) +
+            Constants.QOI_HEADER_SIZE + Constants.QOI_END_MARKER_SIZE
         
         let LAST_PIXEL = pixels.count
         
@@ -97,7 +96,7 @@ public struct SwiftQOI {
             magic: Array(compressed[0..<4]),
             width: Utils.toUInt32(Array(compressed[4..<8])),
             height: Utils.toUInt32(Array(compressed[8..<12])),
-            channels: 4,//compressed[12],
+            channels: compressed[12],
             colorspace: compressed[13]
         )
         
@@ -121,6 +120,8 @@ public struct SwiftQOI {
                 Utils.write8(value: compressed[chunk + 3], offset: &index, in: &buffer)
                 if header.channels == 4 {
                     Utils.write8(value: previousPixel.a, offset: &index, in: &buffer)
+                } else {
+                    Utils.write8(value: 255, offset: &index, in: &buffer)
                 }
                 chunk += 4
                 
@@ -152,6 +153,8 @@ public struct SwiftQOI {
                 Utils.write8(value: pixel.b, offset: &index, in: &buffer)
                 if header.channels == 4 {
                     Utils.write8(value: pixel.a, offset: &index, in: &buffer)
+                } else {
+                    Utils.write8(value: 255, offset: &index, in: &buffer)
                 }
                 
                 previousPixel = pixel
@@ -177,6 +180,8 @@ public struct SwiftQOI {
                 Utils.write8(value: pixel.b, offset: &index, in: &buffer)
                 if header.channels == 4 {
                     Utils.write8(value: pixel.a, offset: &index, in: &buffer)
+                } else {
+                    Utils.write8(value: 255, offset: &index, in: &buffer)
                 }
                 
                 previousPixel = pixel
@@ -202,6 +207,8 @@ public struct SwiftQOI {
                 Utils.write8(value: pixel.b, offset: &index, in: &buffer)
                 if header.channels == 4 {
                     Utils.write8(value: pixel.a, offset: &index, in: &buffer)
+                } else {
+                    Utils.write8(value: 255, offset: &index, in: &buffer)
                 }
                 
                 previousPixel = pixel
@@ -221,6 +228,8 @@ public struct SwiftQOI {
                     
                     if header.channels == 4 {
                         Utils.write8(value: previousPixel.a, offset: &index, in: &buffer)
+                    } else {
+                        Utils.write8(value: 255, offset: &index, in: &buffer)
                     }
                     
                     run -= 1
