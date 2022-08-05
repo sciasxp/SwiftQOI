@@ -2,7 +2,7 @@ import UIKit
 
 public struct SwiftQOI {
     
-    public typealias Components = (width: Int, height: Int, colorSpace: CGColorSpace, channels: Int, bytesPerRow: Int, pixels: [UInt8])
+    public typealias Components = (width: Int, height: Int, colorSpace: CGColorSpace, channels: Int, bytesPerRow: Int, bitmapInfo: UInt32, pixels: [UInt8])
     
     public init() {}
     
@@ -30,18 +30,18 @@ public struct SwiftQOI {
             width: UInt32(imageComponents.width),
             height: UInt32(imageComponents.height),
             channels: UInt8(channels),
-            colorspace: imageComponents.colorSpace == CGColorSpaceCreateDeviceRGB() ? 0 : 1
+            colorspace: 0//imageComponents.colorSpace == CGColorSpaceCreateDeviceRGB() ? 0 : 1
         )
         Utils.writeHeader(header, offset: &index, buffer: &buffer)
         
-        var runningArray: [Pixel] = [Pixel](repeating: Pixel(), count: Constants.RUNNING_ARRAY_SIZE)
-        var previousPixel: Pixel = Pixel()
+        var runningArray: [Pixel] = [Pixel](repeating: Pixel(rgba: nil), count: Constants.RUNNING_ARRAY_SIZE)
+        var previousPixel: Pixel = Pixel(rgba: nil)
         
         var run: Int = 0
         
         for pixelsIndex in stride(from: 0, to: LAST_PIXEL, by: channels) {
             let rgba: [UInt8] = Array(pixels[pixelsIndex..<(pixelsIndex + channels)])
-            let pixel = Pixel(rgba: rgba)
+            let pixel = imageComponents.bitmapInfo == 8194 ? Pixel(bgra: rgba) : Pixel(rgba: rgba)
             
             if previousPixel == pixel && pixelsIndex > 14 {
                 run += 1
@@ -104,8 +104,8 @@ public struct SwiftQOI {
         
         let MAX_BUFFER_SIZE = Int(header.width) * Int(header.height) * Int(header.channels + 1)
         
-        var runningArray: [Pixel] = [Pixel](repeating: Pixel(), count: Constants.RUNNING_ARRAY_SIZE)
-        var previousPixel: Pixel = Pixel()
+        var runningArray: [Pixel] = [Pixel](repeating: Pixel(rgba: nil), count: Constants.RUNNING_ARRAY_SIZE)
+        var previousPixel: Pixel = Pixel(rgba: nil)
         
         var buffer: [UInt8] = [UInt8](repeating: 0, count: MAX_BUFFER_SIZE)
         var index: Int = 0

@@ -24,6 +24,24 @@ struct Pixel: Equatable {
         else { a = 255 }
     }
     
+    init(bgra: [UInt8]? = nil) {
+        guard let bgra = bgra else {
+            r = 0; g = 0; b = 0; a = 255
+            return
+        }
+        
+        r = bgra[2]
+        g = bgra[1]
+        b = bgra[0]
+        
+        if bgra.count > 3 { a = bgra[3] }
+        else { a = 255 }
+    }
+    
+    var description: String {
+        String(format: "0x%02x", r) + String(format: "%02x", g) + String(format: "%02x", b) + String(format: "%02x", a)
+    }
+    
     var hash: Int {
         return (Int(r) * 3 + Int(g) * 5 + Int(b) * 7 + Int(a) * 11) % 64
     }
