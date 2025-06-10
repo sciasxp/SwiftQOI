@@ -69,12 +69,23 @@ extension PlatformImage {
         let size = self.size
         #endif
         
-        let channels: CGFloat = cgImage.alphaInfo == .none ? 3 : 4
-        let bytesPerRow = cgImage.alphaInfo == .none ? Int(3 * size.width) : Int(4 * size.width)
+        // Determine channel count based on the original image's bit depth
+        // 32 bits per pixel = 4 channels (RGBA), 24 bits per pixel = 3 channels (RGB)
+        let channels = cgImage.bitsPerPixel == 32 ? 4 : 3
         
-        let dataSize = size.width * size.height * channels
-        guard dataSize <= Double(Constants.MAX_PIXEL_COUNT * 4) else { return nil } // Safety check
-        var pixelData = [UInt8](repeating: 0, count: Int(dataSize))
+        // Use standardized bitmap info for consistency
+        let bitmapInfo: CGBitmapInfo
+        if channels == 4 {
+            bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
+        } else {
+            bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue)
+        }
+        
+        let bytesPerRow = channels * Int(size.width)
+        let dataSize = bytesPerRow * Int(size.height)
+        guard dataSize <= Constants.MAX_PIXEL_COUNT * 4 else { return nil } // Safety check
+        
+        var pixelData = [UInt8](repeating: 0, count: dataSize)
         guard let context = CGContext (
             data: &pixelData,
             width: Int(size.width),
@@ -82,7 +93,7 @@ extension PlatformImage {
             bitsPerComponent: 8,
             bytesPerRow: bytesPerRow,
             space: colorSpace,
-            bitmapInfo: cgImage.bitmapInfo.rawValue
+            bitmapInfo: bitmapInfo.rawValue
         ) else { return nil }
         
         context.draw(cgImage, in: CGRect(x: 0, y: 0, width: size.width, height: size.height))
@@ -91,9 +102,9 @@ extension PlatformImage {
             width: Int(size.width),
             height: Int(size.height),
             colorSpace: colorSpace,
-            channels: Int(channels),
+            channels: channels,
             bytesPerRow: bytesPerRow,
-            bitmapInfo: cgImage.bitmapInfo.rawValue,
+            bitmapInfo: bitmapInfo.rawValue,
             pixels: pixelData
         )
     }
