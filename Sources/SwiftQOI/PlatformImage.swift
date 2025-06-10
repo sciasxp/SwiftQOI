@@ -1,18 +1,21 @@
 //
-//  UIImage+Extension.swift
+//  PlatformImage.swift
 //  
 //
-//  Created by Luciano Nunes on 30/06/22.
+//  Created by SwiftQOI on 06/10/2025.
 //
 
+#if canImport(UIKit)
 import UIKit
+public typealias PlatformImage = UIImage
+#elseif canImport(AppKit)
+import AppKit
+public typealias PlatformImage = NSImage
+#endif
 
-extension UIImage {
-    
-    static func ==(lhs: UIImage, rhs: UIImage) -> Bool {
-        lhs === rhs || lhs.pngData() == rhs.pngData()
-    }
-    
+import CoreGraphics
+
+extension PlatformImage {
     public convenience init?(qoi: Data) {
         let encoder = SwiftQOI()
         guard let components = encoder.decode(data: qoi) else { return nil }
@@ -41,7 +44,11 @@ extension UIImage {
             intent: .defaultIntent)
         else { return nil }
         
+        #if canImport(UIKit)
         self.init(cgImage: cgim)
+        #elseif canImport(AppKit)
+        self.init(cgImage: cgim, size: NSSize(width: width, height: height))
+        #endif
     }
     
     public func qoiData() -> Data? {
@@ -52,15 +59,18 @@ extension UIImage {
     }
     
     public func pixelData() -> (width: Int, height: Int, colorSpace: CGColorSpace, channels: Int, bytesPerRow: Int, bitmapInfo: UInt32, pixels: [UInt8])? {
+        #if canImport(UIKit)
         guard let cgImage = self.cgImage, let colorSpace = cgImage.colorSpace else { return nil }
+        let size = self.size
+        #elseif canImport(AppKit)
+        guard let cgImage = self.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              let colorSpace = cgImage.colorSpace else { return nil }
+        let size = self.size
+        #endif
         
-//        let contextChannels: CGFloat = (cgImage.alphaInfo == .noneSkipLast || cgImage.alphaInfo == .noneSkipFirst || cgImage.alphaInfo == .none) ? 3 : 4
         let channels: CGFloat = cgImage.alphaInfo == .none ? 3 : 4
         let bytesPerRow = cgImage.alphaInfo == .none ? Int(3 * size.width) : Int(4 * size.width)
         
-//        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        
-        let size = self.size
         let dataSize = size.width * size.height * channels
         var pixelData = [UInt8](repeating: 0, count: Int(dataSize))
         guard let context = CGContext (
@@ -76,14 +86,21 @@ extension UIImage {
         context.draw(cgImage, in: CGRect(x: 0, y: 0, width: size.width, height: size.height))
         
         return (
-            width: Int(self.size.width),
-            height: Int(self.size.height),
+            width: Int(size.width),
+            height: Int(size.height),
             colorSpace: colorSpace,
             channels: Int(channels),
             bytesPerRow: bytesPerRow,
             bitmapInfo: cgImage.bitmapInfo.rawValue,
             pixels: pixelData
         )
+    }
+}
+
+#if canImport(UIKit)
+extension UIImage {
+    static func ==(lhs: UIImage, rhs: UIImage) -> Bool {
+        lhs === rhs || lhs.pngData() == rhs.pngData()
     }
     
     func resizedImageKeepingAspect(for targetSize: CGSize) -> UIImage? {
@@ -92,7 +109,6 @@ extension UIImage {
         let widthRatio  = targetSize.width  / size.width
         let heightRatio = targetSize.height / size.height
 
-        // Figure out what our orientation is, and use that to form the rectangle
         var newSize: CGSize
         if(widthRatio > heightRatio) {
             newSize = CGSize(width: size.width * heightRatio, height: size.height * heightRatio)
@@ -100,34 +116,59 @@ extension UIImage {
             newSize = CGSize(width: size.width * widthRatio, height: size.height * widthRatio)
         }
 
-        // This is the rect that we've calculated out and this is what is actually used below
         let rect = CGRect(origin: .zero, size: newSize)
 
-        // Actually do the resizing to the rect using the ImageContext stuff
         UIGraphicsBeginImageContextWithOptions(newSize, false, 1.0)
         self.draw(in: rect)
         defer { UIGraphicsEndImageContext() }
         return UIGraphicsGetImageFromCurrentImageContext()
     }
-    
-//    func resizedImageKeepingAspect(for size: CGSize) -> UIImage? {
-//        guard size != .zero else {
-//            return self
-//        }
-//
-//        let options: [CFString: Any] = [
-//            kCGImageSourceCreateThumbnailFromImageIfAbsent: true,
-//            kCGImageSourceCreateThumbnailWithTransform: true,
-//            kCGImageSourceShouldCacheImmediately: true,
-//            kCGImageSourceThumbnailMaxPixelSize: max(size.width, size.height),
-//        ]
-//
-//        guard let data = self.pngData(),
-//              let imageSource = CGImageSourceCreateWithData(data as CFData, nil),
-//              let image = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, options as CFDictionary) else {
-//            return nil
-//        }
-//
-//        return UIImage(cgImage: image)
-//    }
 }
+#endif
+
+#if canImport(AppKit)
+extension NSImage {
+    static func ==(lhs: NSImage, rhs: NSImage) -> Bool {
+        guard let lhsData = lhs.tiffRepresentation,
+              let rhsData = rhs.tiffRepresentation else { return false }
+        return lhsData == rhsData
+    }
+    
+    public func pngData() -> Data? {
+        guard let cgImage = self.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        let rep = NSBitmapImageRep(cgImage: cgImage)
+        return rep.representation(using: .png, properties: [:])
+    }
+    
+    func resizedImageKeepingAspect(for targetSize: NSSize) -> NSImage? {
+        guard let cgImage = self.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        
+        let size = self.size
+        
+        let widthRatio = targetSize.width / size.width
+        let heightRatio = targetSize.height / size.height
+        
+        var newSize: NSSize
+        if widthRatio > heightRatio {
+            newSize = NSSize(width: size.width * heightRatio, height: size.height * heightRatio)
+        } else {
+            newSize = NSSize(width: size.width * widthRatio, height: size.height * widthRatio)
+        }
+        
+        guard let colorSpace = cgImage.colorSpace,
+              let context = CGContext(data: nil,
+                                     width: Int(newSize.width),
+                                     height: Int(newSize.height),
+                                     bitsPerComponent: 8,
+                                     bytesPerRow: 0,
+                                     space: colorSpace,
+                                     bitmapInfo: cgImage.bitmapInfo.rawValue) else { return nil }
+        
+        context.interpolationQuality = .high
+        context.draw(cgImage, in: CGRect(origin: .zero, size: newSize))
+        
+        guard let newCGImage = context.makeImage() else { return nil }
+        return NSImage(cgImage: newCGImage, size: newSize)
+    }
+}
+#endif

@@ -1,4 +1,5 @@
-import UIKit
+import Foundation
+import CoreGraphics
 
 public struct SwiftQOI {
     
@@ -17,7 +18,7 @@ public struct SwiftQOI {
         let pixels = imageComponents.pixels
         
         let MAX_BUFFER_SIZE =
-            (imageComponents.width * imageComponents.height * imageComponents.bytesPerRow) +
+            (imageComponents.width * imageComponents.height * (imageComponents.channels + 1)) +
             Constants.QOI_HEADER_SIZE + Constants.QOI_END_MARKER_SIZE
         
         let LAST_PIXEL = pixels.count
@@ -102,7 +103,7 @@ public struct SwiftQOI {
         
         guard header.magic == Constants.MAGIC else { return nil }
         
-        let MAX_BUFFER_SIZE = Int(header.width) * Int(header.height) * Int(header.channels + 1)
+        let MAX_BUFFER_SIZE = Int(header.width) * Int(header.height) * 4
         
         var runningArray: [Pixel] = [Pixel](repeating: Pixel(rgba: nil), count: Constants.RUNNING_ARRAY_SIZE)
         var previousPixel: Pixel = Pixel(rgba: nil)
