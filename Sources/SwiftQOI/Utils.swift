@@ -21,7 +21,7 @@ struct Utils {
     }
     
     static func write32(value: UInt32, offset: inout Int, in buffer: inout [UInt8]) {
-        //memset(&buffer[offset], Int32(bitPattern: value), 1)
+        guard offset + 3 < buffer.count else { return }
         buffer[offset] = UInt8((value & 0xFF000000) >> 24)
         buffer[offset + 1] = UInt8((value & 0x00FF0000) >> 16)
         buffer[offset + 2] = UInt8((value & 0x0000FF00) >> 8)
@@ -30,6 +30,7 @@ struct Utils {
     }
     
     static func write8(value: UInt8, offset: inout Int, in buffer: inout [UInt8]) {
+        guard offset < buffer.count else { return }
         buffer[offset] = value
         offset += 1
     }

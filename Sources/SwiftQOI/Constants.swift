@@ -23,5 +23,8 @@ struct Constants {
     static let MAX_REPEATING_PIXEL = 62
     static let RUNNING_ARRAY_SIZE = 64
     
-    static let MAGIC: [UInt8] = [113, 111, 105, 102]
+    static let MAGIC: [UInt8] = [113, 111, 105, 102] // "qoif"
+    
+    // QOI specification limits
+    static let MAX_PIXEL_COUNT: Int = 400_000_000
 }

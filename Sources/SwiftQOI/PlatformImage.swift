@@ -27,7 +27,8 @@ extension PlatformImage {
         let colorSpace = components.header.colorspace
         
         guard width > 0 && height > 0,
-              pixelsData.count / 4 == width * height,
+              width * height <= Constants.MAX_PIXEL_COUNT,
+              pixelsData.count == width * height * 4, // QOI decoder always outputs RGBA
               let providerRef = CGDataProvider(data: pixelsData as CFData) else { return nil }
         
         guard let cgim = CGImage (
@@ -72,6 +73,7 @@ extension PlatformImage {
         let bytesPerRow = cgImage.alphaInfo == .none ? Int(3 * size.width) : Int(4 * size.width)
         
         let dataSize = size.width * size.height * channels
+        guard dataSize <= Double(Constants.MAX_PIXEL_COUNT * 4) else { return nil } // Safety check
         var pixelData = [UInt8](repeating: 0, count: Int(dataSize))
         guard let context = CGContext (
             data: &pixelData,

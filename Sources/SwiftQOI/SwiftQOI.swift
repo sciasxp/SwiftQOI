@@ -14,12 +14,33 @@ public struct SwiftQOI {
     }
     
     public func encode(imageComponents: Components) -> Data {
+        // Input validation
+        guard imageComponents.width > 0 && imageComponents.height > 0 else {
+            return Data()
+        }
+        guard imageComponents.width * imageComponents.height <= Constants.MAX_PIXEL_COUNT else {
+            return Data() // Prevent overflow per QOI spec
+        }
+        guard imageComponents.channels == 3 || imageComponents.channels == 4 else {
+            return Data()
+        }
+        guard !imageComponents.pixels.isEmpty else {
+            return Data()
+        }
+        
         let channels = imageComponents.channels
         let pixels = imageComponents.pixels
         
-        let MAX_BUFFER_SIZE =
-            (imageComponents.width * imageComponents.height * (imageComponents.channels + 1)) +
-            Constants.QOI_HEADER_SIZE + Constants.QOI_END_MARKER_SIZE
+        // Validate pixel data size matches dimensions
+        let expectedPixelCount = imageComponents.width * imageComponents.height * channels
+        guard pixels.count >= expectedPixelCount else {
+            return Data()
+        }
+        
+        // More precise buffer size calculation
+        // Worst case: every pixel needs RGBA chunk (5 bytes each) + header + end marker
+        let pixelCount = imageComponents.width * imageComponents.height
+        let MAX_BUFFER_SIZE = (pixelCount * 5) + Constants.QOI_HEADER_SIZE + Constants.QOI_END_MARKER_SIZE
         
         let LAST_PIXEL = pixels.count
         
@@ -31,7 +52,7 @@ public struct SwiftQOI {
             width: UInt32(imageComponents.width),
             height: UInt32(imageComponents.height),
             channels: UInt8(channels),
-            colorspace: 0//imageComponents.colorSpace == CGColorSpaceCreateDeviceRGB() ? 0 : 1
+            colorspace: imageComponents.colorSpace.name == CGColorSpace.sRGB ? 0 : 1
         )
         Utils.writeHeader(header, offset: &index, buffer: &buffer)
         
@@ -44,7 +65,7 @@ public struct SwiftQOI {
             let rgba: [UInt8] = Array(pixels[pixelsIndex..<(pixelsIndex + channels)])
             let pixel = imageComponents.bitmapInfo == 8194 ? Pixel(bgra: rgba) : Pixel(rgba: rgba)
             
-            if previousPixel == pixel && pixelsIndex > 14 {
+            if previousPixel == pixel {
                 run += 1
                 if run == Constants.MAX_REPEATING_PIXEL || pixelsIndex == LAST_PIXEL - channels {
                     Utils.write8(value: Constants.QOI_OP_RUN | UInt8(run - 1), offset: &index, in: &buffer)
@@ -91,6 +112,11 @@ public struct SwiftQOI {
     }
     
     public func decode(data: Data) -> (pixelsData: Data, header: QOIHeader)? {
+        // Input validation
+        guard data.count >= Constants.QOI_HEADER_SIZE + Constants.QOI_END_MARKER_SIZE else {
+            return nil
+        }
+        
         let compressed: [UInt8] = [UInt8](data)
         
         let header = QOIHeader (
@@ -102,6 +128,9 @@ public struct SwiftQOI {
         )
         
         guard header.magic == Constants.MAGIC else { return nil }
+        guard header.width > 0 && header.height > 0 else { return nil }
+        guard header.channels == 3 || header.channels == 4 else { return nil }
+        guard Int(header.width) * Int(header.height) <= Constants.MAX_PIXEL_COUNT else { return nil }
         
         let MAX_BUFFER_SIZE = Int(header.width) * Int(header.height) * 4
         
@@ -113,7 +142,11 @@ public struct SwiftQOI {
         var chunk: Int = Constants.QOI_HEADER_SIZE
         
         repeat {
+            // Bounds check before accessing
+            guard chunk < compressed.count else { return nil }
+            
             if compressed[chunk] == Constants.QOI_OP_RGB {
+                guard chunk + 3 < compressed.count else { return nil }
                 previousPixel = Pixel(rgba: [compressed[chunk + 1], compressed[chunk + 2], compressed[chunk + 3]])
                 
                 Utils.write8(value: compressed[chunk + 1], offset: &index, in: &buffer)
@@ -132,6 +165,7 @@ public struct SwiftQOI {
             }
             
             if compressed[chunk] == Constants.QOI_OP_RGBA {
+                guard chunk + 4 < compressed.count else { return nil }
                 previousPixel = Pixel(rgba: [compressed[chunk + 1], compressed[chunk + 2], compressed[chunk + 3], compressed[chunk + 4]])
                 
                 Utils.write8(value: compressed[chunk + 1], offset: &index, in: &buffer)
@@ -193,6 +227,7 @@ public struct SwiftQOI {
             }
             
             if compressed[chunk] & 0xC0 == Constants.QOI_OP_LUMA {
+                guard chunk + 1 < compressed.count else { return nil }
                 let diffG = (compressed[chunk] & 0x3F) &- 32
                 let dr_dg = ((compressed[chunk + 1] & 0xF0) >> 4) &- 8
                 let db_dg = (compressed[chunk + 1] & 0x0F) &- 8
