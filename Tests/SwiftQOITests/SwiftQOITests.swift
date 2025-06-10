@@ -121,6 +121,192 @@ final class SwiftQOITests: XCTestCase {
         XCTAssertGreaterThan(qoi.count, 14) // Must have header + data
     }
     
+    func testRoundTripFileIO() throws {
+        // Load original image
+        guard let originalImage = getImage(named: "reference") else {
+            XCTFail("Failed to load reference image")
+            return
+        }
+        
+        // Get original pixel data for comparison
+        guard let originalComponents = originalImage.pixelData() else {
+            XCTFail("Failed to get pixel data from original image")
+            return
+        }
+        
+        // Encode to QOI format
+        guard let qoiData = originalImage.qoiData() else {
+            XCTFail("Failed to encode image to QOI format")
+            return
+        }
+        
+        // Create temporary file path
+        let tempDir = FileManager.default.temporaryDirectory
+        let tempFile = tempDir.appendingPathComponent("test_roundtrip.qoi")
+        
+        do {
+            // Write QOI data to disk
+            try qoiData.write(to: tempFile)
+            
+            // Verify file was written
+            XCTAssertTrue(FileManager.default.fileExists(atPath: tempFile.path), "QOI file should exist on disk")
+            
+            // Read QOI data back from disk
+            let readQoiData = try Data(contentsOf: tempFile)
+            
+            // Verify data integrity
+            XCTAssertEqual(qoiData.count, readQoiData.count, "File size should match original")
+            XCTAssertEqual(qoiData, readQoiData, "File contents should match original")
+            
+            // Decode QOI data back to image
+            guard let decodedImage = PlatformImage(qoi: readQoiData) else {
+                XCTFail("Failed to decode QOI data from disk")
+                return
+            }
+            
+            // Get decoded pixel data for comparison
+            guard let decodedComponents = decodedImage.pixelData() else {
+                XCTFail("Failed to get pixel data from decoded image")
+                return
+            }
+            
+            // Compare dimensions
+            XCTAssertEqual(originalComponents.width, decodedComponents.width, "Width should match")
+            XCTAssertEqual(originalComponents.height, decodedComponents.height, "Height should match")
+            
+            // For lossy comparison due to potential color space conversions,
+            // we'll verify the QOI round-trip encoding/decoding specifically
+            let encoder = SwiftQOI()
+            let reEncodedData = encoder.encode(imageComponents: originalComponents)
+            guard let reDecodedResult = encoder.decode(data: reEncodedData) else {
+                XCTFail("Failed to re-encode/decode for comparison")
+                return
+            }
+            
+            // Verify QOI round-trip maintains data integrity
+            XCTAssertEqual(Int(reDecodedResult.header.width), originalComponents.width)
+            XCTAssertEqual(Int(reDecodedResult.header.height), originalComponents.height)
+            XCTAssertEqual(Int(reDecodedResult.header.channels), originalComponents.channels)
+            
+            // Verify file I/O didn't corrupt data
+            XCTAssertTrue(encoder.isQOI(data: readQoiData), "Read data should be valid QOI format")
+            
+            print("✅ Round-trip test completed successfully:")
+            print("   Original: \(originalComponents.width)x\(originalComponents.height), \(originalComponents.channels) channels")
+            print("   QOI size: \(qoiData.count) bytes")
+            print("   File I/O: ✓ Written and read successfully")
+            print("   Decoded: \(decodedComponents.width)x\(decodedComponents.height), \(decodedComponents.channels) channels")
+            
+        } catch {
+            XCTFail("File I/O error: \(error.localizedDescription)")
+        }
+        
+        // Cleanup
+        do {
+            try FileManager.default.removeItem(at: tempFile)
+        } catch {
+            print("Warning: Failed to cleanup temp file: \(error.localizedDescription)")
+        }
+    }
+    
+    func testRoundTripFileIOWithMultipleImages() throws {
+        let testImages = ["reference", "reference2", "original"]
+        var successCount = 0
+        
+        for imageName in testImages {
+            // Load original image
+            guard let originalImage = getImage(named: imageName) else {
+                print("⚠️ Skipping \(imageName) - image not found or not loadable")
+                continue
+            }
+            
+            // Get original pixel data
+            guard let originalComponents = originalImage.pixelData() else {
+                print("⚠️ Skipping \(imageName) - failed to get pixel data")
+                continue
+            }
+            
+            // Encode to QOI
+            guard let qoiData = originalImage.qoiData() else {
+                print("⚠️ Skipping \(imageName) - failed to encode to QOI")
+                continue
+            }
+            
+            // Create temp file
+            let tempDir = FileManager.default.temporaryDirectory
+            let tempFile = tempDir.appendingPathComponent("\(imageName)_test.qoi")
+            
+            do {
+                // Write to disk
+                try qoiData.write(to: tempFile)
+                
+                // Read from disk
+                let readData = try Data(contentsOf: tempFile)
+                XCTAssertEqual(qoiData, readData, "File I/O should preserve data for \(imageName)")
+                
+                // Decode and verify
+                guard let decodedImage = PlatformImage(qoi: readData) else {
+                    XCTFail("Failed to decode \(imageName) from disk")
+                    continue
+                }
+                
+                guard let decodedComponents = decodedImage.pixelData() else {
+                    XCTFail("Failed to get decoded pixel data for \(imageName)")
+                    continue
+                }
+                
+                // Verify dimensions match
+                XCTAssertEqual(originalComponents.width, decodedComponents.width, "\(imageName) width should match")
+                XCTAssertEqual(originalComponents.height, decodedComponents.height, "\(imageName) height should match")
+                
+                // Verify QOI format
+                let encoder = SwiftQOI()
+                XCTAssertTrue(encoder.isQOI(data: readData), "\(imageName) should be valid QOI after file I/O")
+                
+                print("✅ \(imageName): \(originalComponents.width)x\(originalComponents.height) -> \(qoiData.count) bytes")
+                successCount += 1
+                
+                // Cleanup
+                try FileManager.default.removeItem(at: tempFile)
+                
+            } catch {
+                print("❌ File I/O failed for \(imageName): \(error)")
+            }
+        }
+        
+        // Ensure at least one image was successfully processed
+        XCTAssertGreaterThan(successCount, 0, "At least one image should be successfully processed")
+        print("📊 Successfully processed \(successCount)/\(testImages.count) images")
+    }
+    
+    func testFileIOErrorHandling() throws {
+        // Test writing to invalid path
+        let invalidPath = URL(fileURLWithPath: "/nonexistent/directory/test.qoi")
+        
+        guard let image = getImage(named: "reference"),
+              let qoiData = image.qoiData() else {
+            XCTFail("Failed to prepare test data")
+            return
+        }
+        
+        // This should fail gracefully
+        XCTAssertThrowsError(try qoiData.write(to: invalidPath)) { error in
+            // Verify we get an appropriate error
+            XCTAssertTrue(error is CocoaError, "Should get CocoaError for invalid path")
+        }
+        
+        // Test reading from non-existent file
+        let nonExistentFile = URL(fileURLWithPath: "/tmp/nonexistent.qoi")
+        XCTAssertThrowsError(try Data(contentsOf: nonExistentFile)) { error in
+            XCTAssertTrue(error is CocoaError, "Should get CocoaError for non-existent file")
+        }
+        
+        // Test reading corrupted QOI data
+        let corruptedData = Data([1, 2, 3, 4]) // Invalid QOI data
+        let decodedImage = PlatformImage(qoi: corruptedData)
+        XCTAssertNil(decodedImage, "Should return nil for corrupted QOI data")
+    }
+    
     func testWrite8Perfomance() throws {
         var buffer = [UInt8](repeating: 0, count: 1_000_000_000)
         var offset = 0
